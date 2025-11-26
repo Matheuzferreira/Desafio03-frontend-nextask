@@ -1,23 +1,26 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Text, TextInput, Button, FlatList, TouchableOpacity, Alert } from 'react-native';
-import { registerRootComponent } from 'expo'; // Importação NECESSÁRIA
+import { StyleSheet, View, Text, TextInput, FlatList, TouchableOpacity, Alert } from 'react-native';
+import { AntDesign, Feather } from '@expo/vector-icons';
+import { registerRootComponent } from 'expo';
 
-// URL da API configurada com o IP local (192.168.1.12)
-const API_URL = 'http://localhost:3000/tarefas'; 
+const API_URL = 'http://192.168.1.12:3000/tarefas'; 
 
 export default function App() {
   const [tarefas, setTarefas] = useState([]);
   const [novaTarefa, setNovaTarefa] = useState('');
+  const [termoBusca, setTermoBusca] = useState('');
+  const [editandoId, setEditandoId] = useState(null);
+  const [editandoTitulo, setEditandoTitulo] = useState('');
 
-  // READ: Busca a lista de tarefas do backend
-  const fetchTarefas = async () => {
+  const fetchTarefas = async (query = '') => {
     try {
-      const response = await fetch(API_URL);
+      const endpoint = query ? `${API_URL}/buscar?query=${query}` : API_URL;
+      const response = await fetch(endpoint);
       const data = await response.json();
       setTarefas(data);
     } catch (error) {
-      console.error(error);
-      Alert.alert("Erro de Conexão", "Não foi possível conectar ao backend. Verifique o IP e se o servidor está rodando.");
+      console.error("Erro ao buscar tarefas:", error);
+      Alert.alert("Erro de Conexão", "Verifique o servidor ou a porta.");
     }
   };
 
@@ -25,7 +28,10 @@ export default function App() {
     fetchTarefas();
   }, []);
 
-  // CREATE: Adiciona nova tarefa
+  const handleBusca = () => {
+    fetchTarefas(termoBusca);
+  };
+
   const handleAddTarefa = async () => {
     if (novaTarefa.trim() === '') return;
 
@@ -37,19 +43,17 @@ export default function App() {
       });
       
       if (response.ok) {
-        const nova = await response.json();
-        setTarefas([...tarefas, nova]);
         setNovaTarefa('');
+        fetchTarefas(termoBusca);
       } else {
-         throw new Error("Falha ao adicionar tarefa.");
+         throw new Error("Falha ao adicionar.");
       }
     } catch (error) {
       console.error(error);
-      Alert.alert("Erro", "Não foi possível adicionar a tarefa.");
+      Alert.alert("Erro", "Não foi possível adicionar.");
     }
   };
 
-  // UPDATE: Marca/desmarca como concluída
   const handleToggleConcluida = async (id, concluida) => {
     try {
       const response = await fetch(`${API_URL}/${id}`, {
@@ -59,20 +63,16 @@ export default function App() {
       });
 
       if (response.ok) {
-        // Atualiza o estado localmente após sucesso no backend
-        setTarefas(tarefas.map(t => 
-          t.id === id ? { ...t, concluida: !concluida } : t
-        ));
+        fetchTarefas(termoBusca);
       } else {
-         throw new Error("Falha ao atualizar tarefa.");
+         throw new Error("Falha ao atualizar.");
       }
     } catch (error) {
       console.error(error);
-      Alert.alert("Erro", "Não foi possível atualizar a tarefa.");
+      Alert.alert("Erro", "Não foi possível atualizar.");
     }
   };
 
-  // DELETE: Remove uma tarefa
   const handleDeleteTarefa = async (id) => {
     try {
       const response = await fetch(`${API_URL}/${id}`, {
@@ -80,48 +80,110 @@ export default function App() {
       });
 
       if (response.status === 204) {
-        // Remove do estado localmente após sucesso
-        setTarefas(tarefas.filter(t => t.id !== id));
+        fetchTarefas(termoBusca);
       } else {
-         throw new Error("Falha ao deletar tarefa.");
+         throw new Error("Falha ao deletar.");
       }
     } catch (error) {
       console.error(error);
-      Alert.alert("Erro", "Não foi possível deletar a tarefa.");
+      Alert.alert("Erro", "Não foi possível deletar.");
     }
   };
 
-  // Renderiza cada item da lista
+  const handleSalvarEdicao = async (id) => {
+    if (editandoTitulo.trim() === '') return;
+
+    try {
+      const response = await fetch(`${API_URL}/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ titulo: editandoTitulo }),
+      });
+
+      if (response.ok) {
+        setEditandoId(null);
+        setEditandoTitulo('');
+        fetchTarefas(termoBusca);
+      } else {
+        throw new Error("Falha ao salvar edição.");
+      }
+    } catch (error) {
+      console.error(error);
+      Alert.alert("Erro", "Não foi possível salvar a edição.");
+    }
+  };
+
   const renderItem = ({ item }) => (
     <View style={styles.itemContainer}>
-      <TouchableOpacity 
-        onPress={() => handleToggleConcluida(item.id, item.concluida)}
-        style={styles.textContainer}
-      >
-        <Text style={[styles.titulo, item.concluida && styles.tituloConcluida]}>
-          {item.titulo}
-        </Text>
-      </TouchableOpacity>
-      <Button 
-        title="X" 
-        color="#e74c3c"
-        onPress={() => handleDeleteTarefa(item.id)}
-      />
+      
+      {editandoId === item.id ? (
+        <View style={styles.inputEdicaoContainer}>
+          <TextInput
+            style={styles.inputEdicao}
+            value={editandoTitulo}
+            onChangeText={setEditandoTitulo}
+            autoFocus
+          />
+          <TouchableOpacity onPress={() => handleSalvarEdicao(item.id)}>
+            <AntDesign name="checkcircle" size={20} color="#2ecc71" style={{ marginRight: 10 }} />
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <TouchableOpacity 
+          onPress={() => handleToggleConcluida(item.id, item.concluida)}
+          style={styles.textContainer}
+        >
+          <Text style={[styles.titulo, item.concluida && styles.tituloConcluida]}>
+            {item.titulo}
+          </Text>
+        </TouchableOpacity>
+      )}
+
+      <View style={styles.actionsContainer}>
+        {editandoId !== item.id && (
+          <TouchableOpacity onPress={() => {
+            setEditandoId(item.id);
+            setEditandoTitulo(item.titulo);
+          }} style={styles.iconButton}>
+            <Feather name="edit" size={20} color="#3498db" />
+          </TouchableOpacity>
+        )}
+        
+        <TouchableOpacity onPress={() => handleDeleteTarefa(item.id)} style={styles.iconButton}>
+          <AntDesign name="close" size={20} color="#e74c3c" />
+        </TouchableOpacity>
+      </View>
     </View>
   );
 
   return (
     <View style={styles.container}>
-      <Text style={styles.heading}>Lista de Tarefas - NexTask</Text>
+      <Text style={styles.heading}>NexTask</Text>
       
+      <View style={styles.inputContainer}>
+        <TextInput
+          style={[styles.input, { width: '70%' }]}
+          placeholder="Buscar tarefas..."
+          placeholderTextColor="#666"
+          value={termoBusca}
+          onChangeText={setTermoBusca}
+        />
+        <TouchableOpacity onPress={handleBusca} style={styles.searchButton}>
+          <Feather name="search" size={20} color="#121212" />
+        </TouchableOpacity>
+      </View>
+
       <View style={styles.inputContainer}>
         <TextInput
           style={styles.input}
           placeholder="Nova tarefa..."
+          placeholderTextColor="#666"
           value={novaTarefa}
           onChangeText={setNovaTarefa}
         />
-        <Button title="Adicionar" onPress={handleAddTarefa} />
+        <TouchableOpacity onPress={handleAddTarefa} style={styles.addButton}>
+          <Text style={styles.addButtonText}>Adicionar</Text>
+        </TouchableOpacity>
       </View>
       
       <FlatList
@@ -139,53 +201,98 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingTop: 50,
     paddingHorizontal: 20,
-    backgroundColor: '#ecf0f1',
+    backgroundColor: '#121212',
   },
   heading: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 20,
+    fontSize: 32,
+    fontWeight: '800',
+    marginBottom: 30,
     textAlign: 'center',
+    color: '#fff',
+    letterSpacing: 2,
   },
   inputContainer: {
     flexDirection: 'row',
-    marginBottom: 20,
+    marginBottom: 15,
   },
   input: {
     flex: 1,
     borderWidth: 1,
-    borderColor: '#bdc3c7',
-    padding: 10,
+    borderColor: '#333',
+    padding: 12,
     marginRight: 10,
-    borderRadius: 5,
+    borderRadius: 8,
+    backgroundColor: '#1f1f1f',
+    color: '#fff',
+    fontSize: 16,
+  },
+  addButton: {
+    backgroundColor: '#3498db',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addButtonText: {
+    color: '#121212',
+    fontWeight: 'bold',
+  },
+  searchButton: {
     backgroundColor: '#fff',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '30%',
   },
   list: {
     flex: 1,
+    paddingTop: 10,
   },
   itemContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 15,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
-    marginBottom: 5,
-    borderRadius: 5,
+    backgroundColor: '#2c3e50',
+    marginBottom: 10,
+    borderRadius: 8,
   },
   textContainer: {
     flex: 1,
     marginRight: 10,
   },
   titulo: {
-    fontSize: 18,
+    fontSize: 16,
+    color: '#fff',
+    fontWeight: '500',
   },
   tituloConcluida: {
     textDecorationLine: 'line-through',
-    color: '#7f8c8d',
+    color: '#95a5a6',
   },
+  actionsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  iconButton: {
+    marginLeft: 10,
+    padding: 5,
+  },
+  inputEdicaoContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  inputEdicao: {
+    flex: 1,
+    borderBottomWidth: 1,
+    borderBottomColor: '#2ecc71',
+    color: '#fff',
+    paddingVertical: 4,
+    marginRight: 10,
+    fontSize: 16,
+  }
 });
-
 
 registerRootComponent(App);
