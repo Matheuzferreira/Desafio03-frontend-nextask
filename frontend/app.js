@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, Text, TextInput, Button, FlatList, TouchableOpacity, Alert } from 'react-native';
+import { registerRootComponent } from 'expo'; // Importação NECESSÁRIA
 
-// URL da API configurada com o IP local
-const API_URL = 'http://192.168.1.12:3000/tarefas'; 
+// URL da API configurada com o IP local (192.168.1.12)
+const API_URL = 'http://localhost:3000/tarefas'; 
 
 export default function App() {
   const [tarefas, setTarefas] = useState([]);
@@ -185,3 +186,6 @@ const styles = StyleSheet.create({
     color: '#7f8c8d',
   },
 });
+
+
+registerRootComponent(App);
